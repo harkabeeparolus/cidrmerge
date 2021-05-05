@@ -57,7 +57,7 @@ def main():
     for R in sorted(OUT_RANGES):
         try:
             for C in __range_to_cidrs(R):
-                sys.stdout.write("%s\n" % C)
+                sys.stdout.write(f"{C}\n")
         except ValueError as ex:
             _e(str(ex))
 
@@ -85,21 +85,21 @@ def merge_ranges(RANGES):
     ITERATIONS = 0
     while True:
         ITERATIONS += 1
-        _d("Starting merge iteration %d" % ITERATIONS)
+        _d(f"Starting merge iteration {ITERATIONS}")
         RANGES.sort()
         for A in RANGES:
             for B in RANGES:
                 result = __compare_ranges(A, B)
                 if result:
-                    _d("Replacing %s with %s" % (repr(A), repr(result)))
+                    _d(f"Replacing {repr(A)} with {repr(result)}")
                     A = copy.deepcopy(result)
                 else:
-                    _d("No merge; continue with %s" % repr(A))
+                    _d(f"No merge; continue with {repr(A)}")
             if A not in OUT_RANGES:
-                _d("Adding %s to the output" % repr(A))
+                _d(f"Adding {repr(A)} to the output")
                 OUT_RANGES.append(A)
             else:
-                _d("%s is already in the output, skipping" % repr(A))
+                _d(f"{repr(A)} is already in the output, skipping")
         if sorted(RANGES) == sorted(OUT_RANGES):
             break
         RANGES = copy.deepcopy(OUT_RANGES)
@@ -116,7 +116,7 @@ def read_input(filenames: List[str]) -> List[str]:
             if not line:
                 continue
             if "#" in line:
-                line = line[:line.find("#")].strip()
+                line = line[: line.find("#")].strip()
             lines.append(line)
     return lines
 
@@ -126,7 +126,7 @@ def convert_lines_to_ranges(lines: List[str]):
     ranges = []
     for line in lines:
         try:
-            _d("%s -> %s" % (line.strip(), __cidr_to_range(line.strip())))
+            _d(f"{line.strip()} -> {__cidr_to_range(line.strip())}")
             ranges.append(__cidr_to_range(line))
         except ValueError as ex:
             _e(str(ex))
@@ -136,37 +136,37 @@ def convert_lines_to_ranges(lines: List[str]):
 def _d(message):
     """Write debug message to stderr if the environment variable DEBUG has been set."""
     if os.environ.get("DEBUG"):
-        sys.stderr.write("DEBUG: %s\n" % message)
+        sys.stderr.write(f"DEBUG: {message}\n")
     return None
 
 
 def _e(message):
     """Print an ERROR message to stderr and exit."""
-    sys.stderr.write("ERROR: %s\n" % message)
+    sys.stderr.write(f"ERROR: {message}\n")
     raise SystemExit(1)
 
 
 def __ip_to_int(ipaddr) -> int:
     """Convert an ipv4 "dotted-quad" string to an integer."""
-    _d("Starting __ip_to_int() with %s" % ipaddr)
+    _d(f"Starting __ip_to_int() with {ipaddr}")
     a, b, c, d = ipaddr.split(".")
     i = int(a) * (2 ** 24)
     i += int(b) * (2 ** 16)
     i += int(c) * (2 ** 8)
     i += int(d)
-    _d("Returning from __ip_to_int() with %d" % i)
+    _d(f"Returning from __ip_to_int() with {i}")
     return i
 
 
 def __int_to_ip(i) -> str:
     """Convert an integer to an ipv4 "dotted-quad" string."""
-    _d("Starting __int_to_ip() with %d" % i)
+    _d(f"Starting __int_to_ip() with {i}")
     a = i // 2 ** 24
     b = (i - a * 2 ** 24) // 2 ** 16
     c = (i - a * 2 ** 24 - b * 2 ** 16) // 2 ** 8
     d = i - a * 2 ** 24 - b * 2 ** 16 - c * 2 ** 8
-    _d("Returning from __int_to_ip() with %d.%d.%d.%d" % (a, b, c, d))
-    return "%d.%d.%d.%d" % (a, b, c, d)
+    _d(f"Returning from __int_to_ip() with {a}.{b}.{c}.{d}")
+    return f"{a}.{b}.{c}.{d}"
 
 
 def __cidr_to_range(cidr) -> Tuple[int, int]:
@@ -179,7 +179,7 @@ def __cidr_to_range(cidr) -> Tuple[int, int]:
         ip, maskbits_s = cidr.split("/", 1)
         mbits = int(maskbits_s)
         if mbits < 1 or mbits > 32:
-            raise ValueError("[%s] Invalid network mask size: %d" % (cidr, mbits))
+            raise ValueError(f"[{cidr}] Invalid network mask size: {mbits}")
         start = __ip_to_int(ip)
         end = start + 2 ** (32 - mbits) - 1
         if start % (2 ** (32 - mbits)) != 0:
@@ -187,8 +187,7 @@ def __cidr_to_range(cidr) -> Tuple[int, int]:
             suggested_start0 = __int_to_ip(x)
             suggested_start1 = __int_to_ip(x + (1 << (32 - mbits)))
             raise ValueError(
-                "[%s] Invalid starting address for /%d. Try %s or %s"
-                % (cidr, mbits, suggested_start0, suggested_start1)
+                f"[{cidr}] Invalid starting address for /{mbits}. Try {suggested_start0} or {suggested_start1}"
             )
     else:
         start = __ip_to_int(cidr)
@@ -204,17 +203,16 @@ def __range_to_cidrs(range_list) -> List[str]:
     without duplication or overlap.
     """
     _d(
-        "Starting __range_to_cidrs() with input: %s(%s)"
-        % (type(range_list), repr(range_list))
+        f"Starting __range_to_cidrs() with input: {type(range_list)}({repr(range_list)})"
     )
     outlist = []
     a = range_list[0]
     b = range_list[1]
     span = b - a + 1
-    _d("Span = %d" % span)
+    _d(f"Span = {span}")
     if span == 1:
-        _d("outlist.append: %s - %s --> %s/32" % (a, b, __int_to_ip(a)))
-        outlist.append("%s/32" % __int_to_ip(a))
+        _d(f"outlist.append: {a} - {b} --> {__int_to_ip(a)}/32")
+        outlist.append(f"{__int_to_ip(a)}/32")
         return outlist
     i = 0
     while i < 33:
@@ -231,20 +229,20 @@ def __range_to_cidrs(range_list) -> List[str]:
                     )
                     i -= 1
             mbits = 32 - i
-            _d("outlist.append: %s - %s --> %s/%d" % (a, b, __int_to_ip(a), mbits))
-            outlist.append("%s/%d" % (__int_to_ip(a), mbits))
+            _d(f"outlist.append: {a} - {b} --> {__int_to_ip(a)}/{mbits}")
+            outlist.append(f"{__int_to_ip(a)}/{mbits}")
             consumed = 1 << i
             remainder = span - consumed
-            _d("Remainder = %d" % remainder)
+            _d(f"Remainder = {remainder}")
             if remainder > 0:
                 a += consumed
                 span = remainder
-                _d("remainder > 0; new starting point a = %s, span = %s" % (a, span))
+                _d(f"remainder > 0; new starting point a = {a}, span = {span}")
                 i = 0
             else:
                 break
         elif x == 0:
-            raise ValueError("Failed to identify suitable mask size for span=%s" % span)
+            raise ValueError(f"Failed to identify suitable mask size for span={span}")
         else:
             i += 1
     return outlist
@@ -258,28 +256,28 @@ def __compare_ranges(a, b) -> Optional[Tuple[int, int]]:
     """
     # identical
     if a[0] == b[0] and a[1] == b[1]:
-        _d("__compare_ranges: %s and %s are identical" % (repr(a), repr(b)))
+        _d(f"__compare_ranges: {repr(a)} and {repr(b)} are identical")
         return None
     # a completely inside b
     if a[0] >= b[0] and a[1] <= b[1]:
-        _d("__compare_ranges: %s is inside %s" % (repr(a), repr(b)))
+        _d(f"__compare_ranges: {repr(a)} is inside {repr(b)}")
         return b
     # b completely inside a
     if b[0] >= a[0] and b[1] <= a[1]:
-        _d("__compare_ranges: %s is inside %s" % (repr(b), repr(a)))
+        _d(f"__compare_ranges: {repr(b)} is inside {repr(a)}")
         return None
     # aaaa
     #   bbbb  <- a/b overlap or immediately adjacent
     if a[0] < b[0] and a[1] < b[1] and b[0] <= a[1] + 1:
-        _d("__compare_ranges: a/b overlap: a=%s, b=%s" % (repr(a), repr(b)))
+        _d(f"__compare_ranges: a/b overlap: a={repr(a)}, b={repr(b)}")
         return (a[0], b[1])
     #   aaaa
     # bbbb    <- b/a overlap or immediately adjacent
     if b[0] < a[0] and b[1] < a[1] and a[0] <= b[1] + 1:
-        _d("__compare_ranges: b/a overlap: a=%s, b=%s" % (repr(a), repr(b)))
+        _d(f"__compare_ranges: b/a overlap: a={repr(a)}, b={repr(b)}")
         return (b[0], a[1])
     # no change
-    _d("__compare_ranges: a and b do not overlap: a=%s, b=%s" % (repr(a), repr(b)))
+    _d(f"__compare_ranges: a and b do not overlap: a={repr(a)}, b={repr(b)}")
     return None
 
 
