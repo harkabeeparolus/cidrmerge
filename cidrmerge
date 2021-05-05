@@ -37,19 +37,20 @@ NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
 
-
+import argparse
 import copy
+import fileinput
 import os
 import sys
+from pathlib import Path
 from typing import List, Optional, Tuple
 
 
 def main():
     """Run the main script logic."""
-    if len(sys.argv) > 1:
-        usage()
+    args, parser = parse_command_line()
 
-    RANGES = read_input()
+    RANGES = convert_lines_to_ranges(read_input(args.files))
     OUT_RANGES = merge_ranges(RANGES)
 
     # Output
@@ -59,6 +60,23 @@ def main():
                 sys.stdout.write("%s\n" % C)
         except ValueError as ex:
             _e(str(ex))
+
+
+def parse_command_line():
+    """Parse command line input."""
+    help_text = "Merge and de-dupe overlapping or adjacent IP ranges."
+    parser = argparse.ArgumentParser(description=help_text)
+    parser.add_argument(
+        "files",
+        metavar="FILE",
+        nargs="*",
+        help="input file(s) (default: standard input)",
+    )
+    args = parser.parse_args()
+    for file in args.files:
+        if not Path(file).exists():
+            parser.error(f"Invalid filename: '{file}'")
+    return args, parser
 
 
 def merge_ranges(RANGES):
@@ -89,30 +107,30 @@ def merge_ranges(RANGES):
     return OUT_RANGES
 
 
-def read_input():
-    """Read input ranges from files."""
-    RANGES = []
-    while True:
-        LINE = sys.stdin.readline()
-        if LINE == "":
-            break
-        C = LINE.find("#")
-        if C != -1:
-            LINE = LINE[:C]
-        if LINE.strip() == "":
-            continue
+def read_input(filenames: List[str]) -> List[str]:
+    """Read CIDRs from files and return them as a list."""
+    lines = []
+    with fileinput.input(filenames) as input_files:
+        for input_line in input_files:
+            line = str(input_line).strip()
+            if not line:
+                continue
+            if "#" in line:
+                line = line[:line.find("#")].strip()
+            lines.append(line)
+    return lines
+
+
+def convert_lines_to_ranges(lines: List[str]):
+    """Convert input lines to ranges."""
+    ranges = []
+    for line in lines:
         try:
-            _d("%s -> %s" % (LINE.strip(), __cidr_to_range(LINE.strip())))
-            RANGES.append(__cidr_to_range(LINE.strip()))
+            _d("%s -> %s" % (line.strip(), __cidr_to_range(line.strip())))
+            ranges.append(__cidr_to_range(line))
         except ValueError as ex:
             _e(str(ex))
-    return RANGES
-
-
-def usage():
-    """Print the usage statement to stderr and exit."""
-    sys.stderr.write("Usage: ./cidrmerge < cidr_list [cidr_list...] > output\n")
-    raise SystemExit(2)
+    return ranges
 
 
 def _d(message):
