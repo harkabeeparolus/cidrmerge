@@ -38,10 +38,75 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
 
 
-import sys
-import os
 import copy
+import os
+import sys
 from typing import List, Optional, Tuple
+
+
+def main():
+    """Run the main script logic."""
+    if len(sys.argv) > 1:
+        usage()
+
+    RANGES = read_input()
+    OUT_RANGES = merge_ranges(RANGES)
+
+    # Output
+    for R in sorted(OUT_RANGES):
+        try:
+            for C in __range_to_cidrs(R):
+                sys.stdout.write("%s\n" % C)
+        except ValueError as ex:
+            _e(str(ex))
+
+
+def merge_ranges(RANGES):
+    """Merge input ranges."""
+    OUT_RANGES = []
+    ITERATIONS = 0
+    while True:
+        ITERATIONS += 1
+        _d("Starting merge iteration %d" % ITERATIONS)
+        RANGES.sort()
+        for A in RANGES:
+            for B in RANGES:
+                result = __compare_ranges(A, B)
+                if result:
+                    _d("Replacing %s with %s" % (repr(A), repr(result)))
+                    A = copy.deepcopy(result)
+                else:
+                    _d("No merge; continue with %s" % repr(A))
+            if A not in OUT_RANGES:
+                _d("Adding %s to the output" % repr(A))
+                OUT_RANGES.append(A)
+            else:
+                _d("%s is already in the output, skipping" % repr(A))
+        if sorted(RANGES) == sorted(OUT_RANGES):
+            break
+        RANGES = copy.deepcopy(OUT_RANGES)
+        OUT_RANGES = []
+    return OUT_RANGES
+
+
+def read_input():
+    """Read input ranges from files."""
+    RANGES = []
+    while True:
+        LINE = sys.stdin.readline()
+        if LINE == "":
+            break
+        C = LINE.find("#")
+        if C != -1:
+            LINE = LINE[:C]
+        if LINE.strip() == "":
+            continue
+        try:
+            _d("%s -> %s" % (LINE.strip(), __cidr_to_range(LINE.strip())))
+            RANGES.append(__cidr_to_range(LINE.strip()))
+        except ValueError as ex:
+            _e(str(ex))
+    return RANGES
 
 
 def usage():
@@ -200,56 +265,5 @@ def __compare_ranges(a, b) -> Optional[Tuple[int, int]]:
     return None
 
 
-RANGES = []
-OUT_RANGES = []
-ITERATIONS = 0
-
-if len(sys.argv) > 1:
-    usage()
-
-# Input
-while True:
-    LINE = sys.stdin.readline()
-    if LINE == "":
-        break
-    C = LINE.find("#")
-    if C != -1:
-        LINE = LINE[:C]
-    if LINE.strip() == "":
-        continue
-    try:
-        _d("%s -> %s" % (LINE.strip(), __cidr_to_range(LINE.strip())))
-        RANGES.append(__cidr_to_range(LINE.strip()))
-    except ValueError as ex:
-        _e(str(ex))
-
-# Merge
-while True:
-    ITERATIONS += 1
-    _d("Starting merge iteration %d" % ITERATIONS)
-    RANGES.sort()
-    for A in RANGES:
-        for B in RANGES:
-            result = __compare_ranges(A, B)
-            if result:
-                _d("Replacing %s with %s" % (repr(A), repr(result)))
-                A = copy.deepcopy(result)
-            else:
-                _d("No merge; continue with %s" % repr(A))
-        if A not in OUT_RANGES:
-            _d("Adding %s to the output" % repr(A))
-            OUT_RANGES.append(A)
-        else:
-            _d("%s is already in the output, skipping" % repr(A))
-    if sorted(RANGES) == sorted(OUT_RANGES):
-        break
-    RANGES = copy.deepcopy(OUT_RANGES)
-    OUT_RANGES = []
-
-# Output
-for R in sorted(OUT_RANGES):
-    try:
-        for C in __range_to_cidrs(R):
-            sys.stdout.write("%s\n" % C)
-    except ValueError as ex:
-        _e(str(ex))
+if __name__ == "__main__":
+    main()
