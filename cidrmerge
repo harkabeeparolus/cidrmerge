@@ -40,10 +40,13 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 import argparse
 import copy
 import fileinput
+import logging
 import os
 import sys
 from pathlib import Path
 from typing import List, Optional, Tuple
+
+log = logging.getLogger("cidrmerge")
 
 
 def main():
@@ -59,7 +62,8 @@ def main():
             for C in __range_to_cidrs(R):
                 sys.stdout.write(f"{C}\n")
         except ValueError as ex:
-            _e(str(ex))
+            log.error(str(ex))
+            raise SystemExit(1)
 
 
 def parse_command_line():
@@ -67,15 +71,27 @@ def parse_command_line():
     help_text = "Merge and de-dupe overlapping or adjacent IP ranges."
     parser = argparse.ArgumentParser(description=help_text)
     parser.add_argument(
+        "-v",
+        "--verbose",
+        action="count",
+        default=0,
+        help="verbose/debug output",
+    )
+    parser.add_argument(
         "files",
         metavar="FILE",
         nargs="*",
         help="input file(s) (default: standard input)",
     )
     args = parser.parse_args()
+
     for file in args.files:
         if not Path(file).exists():
             parser.error(f"Invalid filename: '{file}'")
+
+    if args.verbose >= 1:
+        logging.getLogger().setLevel(logging.DEBUG)
+
     return args, parser
 
 
@@ -85,21 +101,21 @@ def merge_ranges(RANGES):
     ITERATIONS = 0
     while True:
         ITERATIONS += 1
-        _d(f"Starting merge iteration {ITERATIONS}")
+        log.debug(f"Starting merge iteration {ITERATIONS}")
         RANGES.sort()
         for A in RANGES:
             for B in RANGES:
                 result = __compare_ranges(A, B)
                 if result:
-                    _d(f"Replacing {repr(A)} with {repr(result)}")
+                    log.debug(f"Replacing {repr(A)} with {repr(result)}")
                     A = copy.deepcopy(result)
                 else:
-                    _d(f"No merge; continue with {repr(A)}")
+                    log.debug(f"No merge; continue with {repr(A)}")
             if A not in OUT_RANGES:
-                _d(f"Adding {repr(A)} to the output")
+                log.debug(f"Adding {repr(A)} to the output")
                 OUT_RANGES.append(A)
             else:
-                _d(f"{repr(A)} is already in the output, skipping")
+                log.debug(f"{repr(A)} is already in the output, skipping")
         if sorted(RANGES) == sorted(OUT_RANGES):
             break
         RANGES = copy.deepcopy(OUT_RANGES)
@@ -126,46 +142,33 @@ def convert_lines_to_ranges(lines: List[str]):
     ranges = []
     for line in lines:
         try:
-            _d(f"{line.strip()} -> {__cidr_to_range(line.strip())}")
+            log.debug(f"{line.strip()} -> {__cidr_to_range(line.strip())}")
             ranges.append(__cidr_to_range(line))
         except ValueError as ex:
-            _e(str(ex))
+            log.error(str(ex))
     return ranges
-
-
-def _d(message):
-    """Write debug message to stderr if the environment variable DEBUG has been set."""
-    if os.environ.get("DEBUG"):
-        sys.stderr.write(f"DEBUG: {message}\n")
-    return None
-
-
-def _e(message):
-    """Print an ERROR message to stderr and exit."""
-    sys.stderr.write(f"ERROR: {message}\n")
-    raise SystemExit(1)
 
 
 def __ip_to_int(ipaddr) -> int:
     """Convert an ipv4 "dotted-quad" string to an integer."""
-    _d(f"Starting __ip_to_int() with {ipaddr}")
+    log.debug(f"Starting __ip_to_int() with {ipaddr}")
     a, b, c, d = ipaddr.split(".")
     i = int(a) * (2 ** 24)
     i += int(b) * (2 ** 16)
     i += int(c) * (2 ** 8)
     i += int(d)
-    _d(f"Returning from __ip_to_int() with {i}")
+    log.debug(f"Returning from __ip_to_int() with {i}")
     return i
 
 
 def __int_to_ip(i) -> str:
     """Convert an integer to an ipv4 "dotted-quad" string."""
-    _d(f"Starting __int_to_ip() with {i}")
+    log.debug(f"Starting __int_to_ip() with {i}")
     a = i // 2 ** 24
     b = (i - a * 2 ** 24) // 2 ** 16
     c = (i - a * 2 ** 24 - b * 2 ** 16) // 2 ** 8
     d = i - a * 2 ** 24 - b * 2 ** 16 - c * 2 ** 8
-    _d(f"Returning from __int_to_ip() with {a}.{b}.{c}.{d}")
+    log.debug(f"Returning from __int_to_ip() with {a}.{b}.{c}.{d}")
     return f"{a}.{b}.{c}.{d}"
 
 
@@ -202,16 +205,16 @@ def __range_to_cidrs(range_list) -> List[str]:
     produce a list of CIDR strings that together cover all ranges
     without duplication or overlap.
     """
-    _d(
+    log.debug(
         f"Starting __range_to_cidrs() with input: {type(range_list)}({repr(range_list)})"
     )
     outlist = []
     a = range_list[0]
     b = range_list[1]
     span = b - a + 1
-    _d(f"Span = {span}")
+    log.debug(f"Span = {span}")
     if span == 1:
-        _d(f"outlist.append: {a} - {b} --> {__int_to_ip(a)}/32")
+        log.debug(f"outlist.append: {a} - {b} --> {__int_to_ip(a)}/32")
         outlist.append(f"{__int_to_ip(a)}/32")
         return outlist
     i = 0
@@ -224,20 +227,20 @@ def __range_to_cidrs(range_list) -> List[str]:
                 elif i == -1:
                     raise ValueError("Failed to construct a valid CIDR!")
                 else:
-                    _d(
+                    log.debug(
                         "Invalid mask. Working backwards now to find one that will work."
                     )
                     i -= 1
             mbits = 32 - i
-            _d(f"outlist.append: {a} - {b} --> {__int_to_ip(a)}/{mbits}")
+            log.debug(f"outlist.append: {a} - {b} --> {__int_to_ip(a)}/{mbits}")
             outlist.append(f"{__int_to_ip(a)}/{mbits}")
             consumed = 1 << i
             remainder = span - consumed
-            _d(f"Remainder = {remainder}")
+            log.debug(f"Remainder = {remainder}")
             if remainder > 0:
                 a += consumed
                 span = remainder
-                _d(f"remainder > 0; new starting point a = {a}, span = {span}")
+                log.debug(f"remainder > 0; new starting point a = {a}, span = {span}")
                 i = 0
             else:
                 break
@@ -256,30 +259,32 @@ def __compare_ranges(a, b) -> Optional[Tuple[int, int]]:
     """
     # identical
     if a[0] == b[0] and a[1] == b[1]:
-        _d(f"__compare_ranges: {repr(a)} and {repr(b)} are identical")
+        log.debug(f"__compare_ranges: {repr(a)} and {repr(b)} are identical")
         return None
     # a completely inside b
     if a[0] >= b[0] and a[1] <= b[1]:
-        _d(f"__compare_ranges: {repr(a)} is inside {repr(b)}")
+        log.debug(f"__compare_ranges: {repr(a)} is inside {repr(b)}")
         return b
     # b completely inside a
     if b[0] >= a[0] and b[1] <= a[1]:
-        _d(f"__compare_ranges: {repr(b)} is inside {repr(a)}")
+        log.debug(f"__compare_ranges: {repr(b)} is inside {repr(a)}")
         return None
     # aaaa
     #   bbbb  <- a/b overlap or immediately adjacent
     if a[0] < b[0] and a[1] < b[1] and b[0] <= a[1] + 1:
-        _d(f"__compare_ranges: a/b overlap: a={repr(a)}, b={repr(b)}")
+        log.debug(f"__compare_ranges: a/b overlap: a={repr(a)}, b={repr(b)}")
         return (a[0], b[1])
     #   aaaa
     # bbbb    <- b/a overlap or immediately adjacent
     if b[0] < a[0] and b[1] < a[1] and a[0] <= b[1] + 1:
-        _d(f"__compare_ranges: b/a overlap: a={repr(a)}, b={repr(b)}")
+        log.debug(f"__compare_ranges: b/a overlap: a={repr(a)}, b={repr(b)}")
         return (b[0], a[1])
     # no change
-    _d(f"__compare_ranges: a and b do not overlap: a={repr(a)}, b={repr(b)}")
+    log.debug(f"__compare_ranges: a and b do not overlap: a={repr(a)}, b={repr(b)}")
     return None
 
 
 if __name__ == "__main__":
+    default_level = logging.DEBUG if os.environ.get("DEBUG") else logging.WARNING
+    logging.basicConfig(level=default_level)
     main()
