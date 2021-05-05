@@ -42,7 +42,6 @@ import copy
 import fileinput
 import logging
 import os
-import sys
 from pathlib import Path
 from typing import List, Optional, Tuple
 
@@ -51,7 +50,7 @@ log = logging.getLogger("cidrmerge")
 
 def main():
     """Run the main script logic."""
-    args, parser = parse_command_line()
+    args, _ = parse_command_line()
 
     ranges = convert_lines_to_ranges(read_input(args.files))
     out_ranges = merge_ranges(ranges)
@@ -115,45 +114,45 @@ def convert_lines_to_ranges(lines: List[str]):
     return ranges
 
 
-def merge_ranges(RANGES):
+def merge_ranges(input_ranges):
     """Merge input ranges."""
-    OUT_RANGES = []
-    ITERATIONS = 0
+    ranges = []
+    iterations = 0
     while True:
-        ITERATIONS += 1
-        log.debug(f"Starting merge iteration {ITERATIONS}")
-        RANGES.sort()
-        for A in RANGES:
-            for B in RANGES:
-                result = __compare_ranges(A, B)
+        iterations += 1
+        log.debug(f"Starting merge iteration {iterations}")
+        input_ranges.sort()
+        for a in input_ranges:
+            for b in input_ranges:
+                result = __compare_ranges(a, b)
                 if result:
-                    log.debug(f"Replacing {repr(A)} with {repr(result)}")
-                    A = copy.deepcopy(result)
+                    log.debug(f"Replacing {repr(a)} with {repr(result)}")
+                    a = copy.deepcopy(result)
                 else:
-                    log.debug(f"No merge; continue with {repr(A)}")
-            if A not in OUT_RANGES:
-                log.debug(f"Adding {repr(A)} to the output")
-                OUT_RANGES.append(A)
+                    log.debug(f"No merge; continue with {repr(a)}")
+            if a not in ranges:
+                log.debug(f"Adding {repr(a)} to the output")
+                ranges.append(a)
             else:
-                log.debug(f"{repr(A)} is already in the output, skipping")
-        if sorted(RANGES) == sorted(OUT_RANGES):
+                log.debug(f"{repr(a)} is already in the output, skipping")
+        if sorted(input_ranges) == sorted(ranges):
             break
-        RANGES = copy.deepcopy(OUT_RANGES)
-        OUT_RANGES = []
-    return OUT_RANGES
+        input_ranges = copy.deepcopy(ranges)
+        ranges = []
+    return ranges
 
 
 def range_to_cidr(ranges):
     """Convert a list of ranges to list of CIDRs."""
     cidrs = []
-    for R in sorted(ranges):
+    for ip_range in sorted(ranges):
         try:
-            for C in __range_to_cidrs(R):
-                # sys.stdout.write(f"{C}\n")
-                cidrs.append(C)
+            for cidr in __range_to_cidrs(ip_range):
+                # sys.stdout.write(f"{cidr}\n")
+                cidrs.append(cidr)
         except ValueError as ex:
             log.error(str(ex))
-            raise SystemExit(1)
+            raise SystemExit(1) from ex
     return cidrs
 
 
@@ -198,7 +197,8 @@ def __cidr_to_range(cidr) -> Tuple[int, int]:
             suggested_start0 = __int_to_ip(x)
             suggested_start1 = __int_to_ip(x + (1 << (32 - mbits)))
             raise ValueError(
-                f"[{cidr}] Invalid starting address for /{mbits}. Try {suggested_start0} or {suggested_start1}"
+                f"[{cidr}] Invalid starting address for /{mbits}. "
+                f"Try {suggested_start0} or {suggested_start1}"
             )
     else:
         start = __ip_to_int(cidr)
@@ -232,13 +232,12 @@ def __range_to_cidrs(range_list) -> List[str]:
             while True:
                 if a % (2 ** i) == 0:
                     break
-                elif i == -1:
+                if i == -1:
                     raise ValueError("Failed to construct a valid CIDR!")
-                else:
-                    log.debug(
-                        "Invalid mask. Working backwards now to find one that will work."
-                    )
-                    i -= 1
+                log.debug(
+                    "Invalid mask. Working backwards now to find one that will work."
+                )
+                i -= 1
             mbits = 32 - i
             log.debug(f"outlist.append: {a} - {b} --> {__int_to_ip(a)}/{mbits}")
             outlist.append(f"{__int_to_ip(a)}/{mbits}")
@@ -293,6 +292,6 @@ def __compare_ranges(a, b) -> Optional[Tuple[int, int]]:
 
 
 if __name__ == "__main__":
-    default_level = logging.DEBUG if os.environ.get("DEBUG") else logging.WARNING
-    logging.basicConfig(level=default_level)
+    DEFAULT_LEVEL = logging.DEBUG if os.environ.get("DEBUG") else logging.WARNING
+    logging.basicConfig(level=DEFAULT_LEVEL)
     main()

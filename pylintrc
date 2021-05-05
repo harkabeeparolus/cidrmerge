@@ -62,6 +62,7 @@ confidence=
 # --disable=W".
 
 disable=useless-return,
+      logging-fstring-interpolation
 
 #        redefined-outer-name,
 #        global-statement,
